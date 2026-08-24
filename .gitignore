@@ -1,8 +1,4 @@
-# Adiciona as extensões grandes ao .gitignore
-echo "*.csv" >> .gitignore
+echo "*.csv" > .gitignore
 echo "*.zip" >> .gitignore
-
-# Adiciona o gitignore e o novo arquivo parquet
-git add .gitignore
-git add archive/creditcard.parquet
-git add .
+echo "archive/*.csv" >> .gitignore
+echo "archive/*.zip" >> .gitignore
