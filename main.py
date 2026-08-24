@@ -58,7 +58,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# 2. CARGA E TRATAMENTO DOS DADOS (creditcard.csv)
+# 2. CARGA E TRATAMENTO DOS DADOS
 # -------------------------------------------------------------
 @st.cache_data
 def carregar_dados():
@@ -68,28 +68,29 @@ def carregar_dados():
         os.path.join(diretorio_atual, 'creditcard.parquet'),
         os.path.join(diretorio_atual, 'archive', 'creditcard.parquet'),
         os.path.join(os.path.dirname(diretorio_atual), 'creditcard.parquet'),
-        # Fallbacks caso mantenha o zip
         os.path.join(diretorio_atual, 'creditcard.zip'),
         os.path.join(diretorio_atual, 'archive', 'creditcard.zip'),
+        os.path.join(diretorio_atual, 'creditcard.csv'),
+        os.path.join(diretorio_atual, 'archive', 'creditcard.csv'),
     ]
     
     caminho_arquivo = next((p for p in possiveis_caminhos if os.path.exists(p)), None)
     
     if caminho_arquivo is None:
-        st.error("Arquivo de dados não foi encontrado!")
+        st.error("Arquivo de dados (creditcard.parquet, zip ou csv) não foi encontrado!")
         st.stop()
         
     if caminho_arquivo.endswith('.parquet'):
-        return pd.read_parquet(caminho_arquivo)
+        df = pd.read_parquet(caminho_arquivo)
+    else:
+        df = pd.read_csv(caminho_arquivo, compression='zip' if caminho_arquivo.endswith('.zip') else None)
     
-    # Fallback para ZIP/CSV caso não tenha convertido ainda
-    df = pd.read_csv(caminho_arquivo, compression='zip' if caminho_arquivo.endswith('.zip') else None)
-    
-    # Redução de tipos em runtime para não esgotar a RAM
+    # Otimização de tipos de dados para economia de RAM
     float_cols = [c for c in df.columns if df[c].dtype == 'float64']
     df[float_cols] = df[float_cols].astype('float32')
     df['Class'] = df['Class'].astype('int8')
     
+    # Criação das colunas derivadas
     df['Status'] = df['Class'].map({0: 'Legítima', 1: 'Fraude'}).astype('category')
     df['Hora_do_Dia'] = ((df['Time'] / 3600) % 24).astype('int8')
 
@@ -108,7 +109,7 @@ total_legitimas = int((df['Class'] == 0).sum())
 taxa_fraude = (total_fraudes / total_transacoes) * 100
 prejuizo_total = df[df['Class'] == 1]['Amount'].sum()
 
-# Cálculo do Intervalo de Confiança de 95% para Médias (Z = 1.96)
+# Intervalo de Confiança de 95% para Médias (Z = 1.96)
 valores_leg = df[df['Class'] == 0]['Amount']
 valores_frd = df[df['Class'] == 1]['Amount']
 
@@ -184,7 +185,7 @@ with col_texto_1:
     st.info(f"""
     **Por que a margem da fraude é muito maior?**
     * **Legítima (Margem minúscula de ±${erro_leg:.2f}):** A amostra é massiva (n = {n_leg:,}). O tamanho amostral no denominador divide a incerteza quase a zero.
-    * **Fraude (Margem ampla de ±${erro_frd:.2f}):** A amostra é pequena (n = {n_frd:,}) e a variação de valores é extrema (desde centavos até milhares de dólares). Menos dados com alta dispersão geram maior incerteza amostral.
+    * **Fraude (Margem ampla de ±${erro_frd:.2f}):** A amostra é pequena (n = {n_frd:,}) e a variação de valores é extrema. Menos dados com alta dispersão geram maior incerteza amostral.
     """)
 
 with col_graf_1:
@@ -316,9 +317,9 @@ with col_texto_4:
 
     st.info("""
     **O que representam esses eixos (V1 a V28)?**
-    * **Anonimização via PCA:** Para proteger o sigilo bancário (dados de cartão, geolocalização e histórico), a técnica de Análise de Componentes Principais compactou dezenas de variáveis reais nesses eixos numéricos.
+    * **Anonimização via PCA:** Para proteger o sigilo bancário, a técnica de Análise de Componentes Principais compactou dezenas de variáveis reais nesses eixos numéricos.
     * **Coordenadas de Risco:** Cada ponto no gráfico é uma transação posicionada conforme seu padrão comportamental.
-    * **Poder Preditivo:** Cruzamentos como **V14 × V17** isolam as fraudes (vermelho) nas extremidades, indicando aos modelos de Machine Learning os principais padrões de corte.
+    * **Poder Preditivo:** Cruzamentos como **V14 × V17** isolam as fraudes (vermelho) nas extremidades.
     """)
 
 with col_graf_4:
@@ -350,7 +351,7 @@ with col_texto_5:
     st.markdown(f"""
     * Apenas **{taxa_fraude:.3f}%** da base é composta por golpes (1 fraude para cada ~578 compras legítimas).
     * A acurácia tradicional é inadequada para medir o desempenho do classificador.
-    * A métrica principal de avaliação deve ser **PR-AUC** (Precision-Recall AUC) e **F1-Score**.
+    * A métrica principal de avaliação deve ser **PR-AUC** e **F1-Score**.
     """)
 
 with col_graf_5:
@@ -382,7 +383,7 @@ st.markdown('<div class="question-title">Simulador de Limiar de Decisão Antifra
 st.write("Avalie em tempo real o trade-off entre bloquear compras de clientes (Falsos Positivos) e deixar fraudes passarem (Falsos Negativos):")
 
 score_risco = (
-    -0.45 * df['V14'] 
+    - 0.45 * df['V14'] 
     - 0.35 * df['V17'] 
     - 0.30 * df['V12'] 
     + 0.25 * df['V4'] 
